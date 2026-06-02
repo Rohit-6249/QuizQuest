@@ -104,11 +104,38 @@ function buildStartForm() {
     $("#f-mode").innerHTML =
       `<button type="button" class="chip active" data-value="TIMED">⏱ Timed</button>` +
       `<button type="button" class="chip" data-value="PRACTICE">🧘 Practice</button>`;
+    $("#f-time").innerHTML =
+      `<button type="button" class="chip active" data-value="auto">Auto</button>` +
+      `<button type="button" class="chip" data-value="300">5 min</button>` +
+      `<button type="button" class="chip" data-value="600">10 min</button>` +
+      `<button type="button" class="chip" data-value="900">15 min</button>` +
+      `<button type="button" class="chip" data-value="custom">Custom…</button>`;
 
     chipGroup("#f-difficulty");
     chipGroup("#f-mode");
+    chipGroup("#f-time");
+    // show the custom-minutes box only when "Custom…" is picked
+    $$("#f-time .chip").forEach(ch => ch.addEventListener("click", () => {
+      $("#f-time-custom").style.display = ch.dataset.value === "custom" ? "block" : "none";
+    }));
+    // the time limit only applies to timed quizzes
+    $$("#f-mode .chip").forEach(ch => ch.addEventListener("click", () => {
+      $("#time-field").style.display = chosenChip("#f-mode") === "TIMED" ? "block" : "none";
+    }));
     classSel.dataset.ready = "1";
   }
+}
+
+/** Resolve the chosen time limit into seconds (null = let the server choose). */
+function chosenDurationSeconds() {
+  if (chosenChip("#f-mode") !== "TIMED") return null;
+  const t = chosenChip("#f-time");
+  if (t === "auto") return null;
+  if (t === "custom") {
+    const mins = Number($("#f-time-custom").value);
+    return mins >= 1 ? Math.round(mins * 60) : null;
+  }
+  return Number(t);
 }
 
 function chipGroup(sel) {
@@ -158,6 +185,11 @@ $("#start-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   try {
     const difficulty = chosenChip("#f-difficulty");
+    if (chosenChip("#f-mode") === "TIMED" && chosenChip("#f-time") === "custom"
+        && !($("#f-time-custom").value >= 1)) {
+      btn.disabled = false;
+      return toast("Enter a custom time in minutes (1–120).", "err");
+    }
     const body = {
       studentName: $("#f-name").value.trim(),
       classLevel: Number($("#f-class").value),
@@ -165,6 +197,7 @@ $("#start-form").addEventListener("submit", async (e) => {
       difficulty: difficulty || null,
       count: Number($("#f-count").value),
       mode: chosenChip("#f-mode"),
+      durationSeconds: chosenDurationSeconds(),
     };
     const session = await api("/api/quizzes", { method: "POST", body: JSON.stringify(body) });
     startQuiz(session);

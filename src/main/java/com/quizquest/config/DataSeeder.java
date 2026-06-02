@@ -8,10 +8,12 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 /**
- * Seeds the question bank the first time the app runs (when the table is empty).
+ * Seeds the question bank on startup.
  *
- * The actual questions come from {@link QuestionGenerator}, which produces 200 questions per class
- * across classes 6–10 and all four subjects.
+ * The questions come from {@link QuestionGenerator} (≈360 per class across classes 6–10). The seeder
+ * is self-updating: if the generated bank size differs from what's already stored — e.g. after the
+ * bank is expanded in a new build — it replaces the old questions so you always get the latest bank
+ * without having to delete the database by hand. (Quiz history is untouched.)
  */
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -25,12 +27,16 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (questions.count() > 0) {
-            return; // already seeded
-        }
         List<Question> bank = new ArrayList<>();
         for (int classLevel = 6; classLevel <= 10; classLevel++) {
             bank.addAll(generator.generateForClass(classLevel));
+        }
+        long existing = questions.count();
+        if (existing == bank.size()) {
+            return; // bank already up to date
+        }
+        if (existing > 0) {
+            questions.deleteAll(); // clear the stale bank (also clears each question's options)
         }
         questions.saveAll(bank);
     }

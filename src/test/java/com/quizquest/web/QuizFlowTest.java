@@ -122,4 +122,38 @@ class QuizFlowTest {
                                 "subject", "Astrophysics", "count", 5, "mode", "PRACTICE"))))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void aHardSingleSubjectQuizHasNoRepeatedQuestions() throws Exception {
+        JsonNode session = postJson("/api/quizzes", Map.of(
+                "studentName", "Distinct", "classLevel", 10, "subject", "Mathematics",
+                "difficulty", "HARD", "count", 20, "mode", "PRACTICE"));
+        JsonNode questions = session.get("questions");
+        assertThat(questions.size()).isEqualTo(20);
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (JsonNode q : questions) {
+            ids.add(q.get("questionId").asLong());
+        }
+        assertThat(ids).hasSize(20); // all distinct
+    }
+
+    @Test
+    void aMixedQuizIsBalancedAcrossSubjects() throws Exception {
+        JsonNode session = postJson("/api/quizzes", Map.of(
+                "studentName", "Mixer", "classLevel", 8, "count", 12, "mode", "PRACTICE"));
+        JsonNode questions = session.get("questions");
+        assertThat(questions.size()).isEqualTo(12);
+
+        java.util.Map<String, Integer> bySubject = new java.util.HashMap<>();
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (JsonNode q : questions) {
+            bySubject.merge(q.get("subject").asText(), 1, Integer::sum);
+            ids.add(q.get("questionId").asLong());
+        }
+        assertThat(ids).hasSize(12); // no repeats
+        assertThat(bySubject).hasSize(4); // all four subjects present
+        int max = bySubject.values().stream().max(Integer::compare).orElse(0);
+        int min = bySubject.values().stream().min(Integer::compare).orElse(0);
+        assertThat(max - min).isLessThanOrEqualTo(1); // evenly distributed (3 each)
+    }
 }

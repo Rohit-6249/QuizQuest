@@ -3,7 +3,6 @@ package com.quizquest.service;
 import com.quizquest.domain.Difficulty;
 import com.quizquest.domain.Question;
 import com.quizquest.domain.QuizItem;
-import com.quizquest.domain.QuizMode;
 import com.quizquest.domain.QuizSession;
 import com.quizquest.domain.SessionStatus;
 import com.quizquest.dto.AnswerInput;
@@ -24,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -60,15 +60,17 @@ public class QuizService {
     @Transactional
     public QuizSessionDto start(StartQuizRequest request) {
         String subject = blankToNull(request.subject());
-        List<Question> pool = questions.findForQuiz(request.classLevel(), subject, request.difficulty());
-        if (pool.isEmpty()) {
+        // For a single subject, take distinct questions from its pool. For a "mixed" quiz (no
+        // subject), pull an even number from each subject. Either way the questions are distinct,
+        // so a quiz never repeats a question.
+        List<Question> chosen = (subject == null)
+                ? selectBalancedAcrossSubjects(request.classLevel(), request.difficulty(), request.count())
+                : selectFromSubject(request.classLevel(), subject, request.difficulty(), request.count());
+        if (chosen.isEmpty()) {
             throw new BadRequestException(
                     "No questions are available for that class / subject / difficulty yet.");
         }
-
-        Collections.shuffle(pool);
-        int count = Math.min(request.count(), pool.size());
-        List<Question> chosen = pool.subList(0, count);
+        int count = chosen.size();
 
         int duration = resolveDuration(request.durationSeconds(), count);
         QuizSession session = new QuizSession(
@@ -92,6 +94,46 @@ public class QuizService {
                 session.getSubject(), session.getDifficulty(), session.getMode(),
                 session.getDurationSeconds(), session.getStartedAt(), session.getDeadline(),
                 clock.instant(), count, questionDtos);
+    }
+
+    /** Distinct questions from one subject's pool, shuffled, capped at the requested count. */
+    private List<Question> selectFromSubject(int classLevel, String subject, Difficulty difficulty,
+                                             int count) {
+        List<Question> pool = new ArrayList<>(questions.findForQuiz(classLevel, subject, difficulty));
+        Collections.shuffle(pool);
+        return new ArrayList<>(pool.subList(0, Math.min(count, pool.size())));
+    }
+
+    /**
+     * Pull an even number of questions from each subject (round-robin), so a mixed quiz is balanced.
+     * All picks are distinct because each subject's questions are disjoint and taken at most once.
+     */
+    private List<Question> selectBalancedAcrossSubjects(int classLevel, Difficulty difficulty,
+                                                        int count) {
+        Map<String, List<Question>> bySubject = new LinkedHashMap<>();
+        for (String subject : questions.findDistinctSubjects()) {
+            List<Question> pool = new ArrayList<>(questions.findForQuiz(classLevel, subject, difficulty));
+            if (!pool.isEmpty()) {
+                Collections.shuffle(pool);
+                bySubject.put(subject, pool);
+            }
+        }
+        List<Question> result = new ArrayList<>();
+        boolean addedThisRound = true;
+        while (result.size() < count && addedThisRound) {
+            addedThisRound = false;
+            for (List<Question> pool : bySubject.values()) {
+                if (result.size() >= count) {
+                    break;
+                }
+                if (!pool.isEmpty()) {
+                    result.add(pool.remove(pool.size() - 1));
+                    addedThisRound = true;
+                }
+            }
+        }
+        Collections.shuffle(result); // interleave subjects within the quiz order
+        return result;
     }
 
     /** Re-fetch a running quiz (e.g. after a page refresh) so the countdown can resync. */
