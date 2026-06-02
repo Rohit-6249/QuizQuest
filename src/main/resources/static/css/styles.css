@@ -265,6 +265,7 @@ textarea { resize: vertical; }
 .table tbody tr { transition: background .12s; }
 .table tbody tr:hover { background: #faf9ff; }
 .medal { font-size: 1.1rem; }
+.opt-count { color: var(--muted); font-weight: 700; font-size: .85rem; }
 .diff-tag { padding: .15rem .55rem; border-radius: 999px; font-weight: 800; font-size: .72rem; color: #fff; }
 .diff-tag.EASY { background: var(--easy); } .diff-tag.MEDIUM { background: var(--medium); } .diff-tag.HARD { background: var(--hard); }
 .row-actions { display: flex; gap: .4rem; }

@@ -426,16 +426,16 @@ async function loadBank() {
   if ($("#bank-difficulty").value) params.set("difficulty", $("#bank-difficulty").value);
   const rows = await api(`/api/questions?${params}`);
   $("#bank-table").innerHTML = `
-    <thead><tr><th>Class</th><th>Subject</th><th>Level</th><th>Question</th><th>Answer</th><th></th></tr></thead>
+    <thead><tr><th>Class</th><th>Subject</th><th>Level</th><th>Question</th><th>Options</th><th></th></tr></thead>
     <tbody>${rows.length ? rows.map(q => `
       <tr>
         <td>${q.classLevel}</td>
         <td>${esc(q.subject)}</td>
         <td><span class="diff-tag ${q.difficulty}">${q.difficulty}</span></td>
         <td>${esc(q.text)}</td>
-        <td>${esc(q.options[q.correctIndex] ?? "")}</td>
+        <td><span class="opt-count">${q.options.length} options</span></td>
         <td><div class="row-actions">
-          <button class="icon-btn" data-edit="${q.id}" title="Edit">✎</button>
+          <button class="icon-btn" data-edit="${q.id}" title="Edit (answer is shown here)">✎</button>
           <button class="icon-btn danger" data-del="${q.id}" title="Delete">🗑</button>
         </div></td>
       </tr>`).join("") : `<tr><td colspan="6" class="empty">No questions match these filters.</td></tr>`}
